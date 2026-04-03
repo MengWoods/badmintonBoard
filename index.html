@@ -4,280 +4,227 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>🏸 Badminton Scoreboard</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#030712" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if ('serviceWorker' in navigator)
+      navigator.serviceWorker.register('./sw.js');
+  </script>
   <style>
     * { -webkit-tap-highlight-color: transparent; }
-    body { touch-action: pan-y; overscroll-behavior: none; }
     .btn { cursor: pointer; transition: transform 0.07s ease; }
     .btn:active { transform: scale(0.93); }
     @keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.08)} 100%{transform:scale(1)} }
     .pop { animation: pop 0.22s ease; }
   </style>
 </head>
-<body class="bg-gray-950 text-white min-h-screen flex flex-col select-none">
+<!--
+  height:100dvh  = dynamic viewport height (shrinks when browser chrome hides on scroll)
+  overflow:hidden = hard ceiling — nothing scrolls out
+  flex flex-col  = header shrinks, main fills the rest
+-->
+<body class="bg-gray-950 text-white flex flex-col select-none overflow-hidden"
+      style="height:100dvh">
 
-  <!-- ████  HEADER  ████ -->
-  <header class="bg-gray-900 border-b border-gray-800 px-4 py-2.5 sticky top-0 z-10">
+  <!-- ████  HEADER  ████
+       Sets won lives here so we save a full row of height.  -->
+  <header class="bg-gray-900 border-b border-gray-800 px-4 py-2 shrink-0 z-10">
     <div class="flex items-center justify-between max-w-sm mx-auto">
-      <span class="text-xl font-black text-yellow-400 tracking-tight">🏸 Badminton</span>
+
+      <!-- Left: logo + sets won -->
+      <div class="flex items-center gap-2.5">
+        <span class="text-lg font-black text-yellow-400">🏸</span>
+        <div class="leading-tight">
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest">Sets won</div>
+          <div class="font-black text-sm leading-none">
+            <span class="text-blue-400" id="gA">0</span>
+            <span class="text-gray-600 mx-0.5">–</span>
+            <span class="text-orange-400" id="gB">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: mode toggle + new match -->
       <div class="flex items-center gap-2">
         <button id="modeBtn" onclick="toggleMode()"
-          class="btn px-4 py-2 rounded-full text-sm font-bold bg-violet-700 text-white">
+          class="btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-violet-700 text-white">
           Singles
         </button>
         <button onclick="confirmNew()"
-          class="btn px-4 py-2 rounded-full text-sm font-bold bg-gray-700 text-white">
+          class="btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-gray-700 text-white">
           New
         </button>
       </div>
     </div>
   </header>
 
-  <!-- ████  MAIN  ████ -->
-  <main class="flex-1 flex flex-col items-center gap-3 px-3 pt-3 pb-5 max-w-sm mx-auto w-full">
-
-    <!-- Sets won -->
-    <div class="w-full flex justify-between items-center bg-gray-900 rounded-xl px-5 py-2">
-      <span class="text-blue-400 font-bold text-sm">A</span>
-      <div class="text-center">
-        <div class="text-xs text-gray-500 uppercase tracking-widest leading-none mb-0.5">Sets</div>
-        <div class="text-xl font-black leading-none">
-          <span class="text-blue-400" id="gA">0</span>
-          <span class="text-gray-600 mx-1">–</span>
-          <span class="text-orange-400" id="gB">0</span>
-        </div>
-      </div>
-      <span class="text-orange-400 font-bold text-sm">B</span>
-    </div>
+  <!-- ████  MAIN  ████
+       flex-1 min-h-0 = fills remaining space without exceeding it
+       gap-2 py-2     = tight but breathable spacing                  -->
+  <main class="flex-1 min-h-0 flex flex-col items-center gap-2 px-3 py-2
+               max-w-sm mx-auto w-full overflow-hidden">
 
     <!-- Player B score card -->
     <div id="cardB"
-      class="w-full bg-gray-900 rounded-2xl px-5 py-3 flex items-center justify-between border-2 border-gray-800"
+      class="w-full bg-gray-900 rounded-xl px-4 py-2 flex items-center justify-between
+             border-2 border-gray-800 shrink-0"
       style="transition:border-color .15s">
       <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <span id="srvB" class="hidden text-yellow-300 font-black text-xs tracking-widest
-                                  bg-yellow-400/15 px-2 py-0.5 rounded-full">SERVES</span>
-          <span class="text-orange-400 font-black text-xl">Player B</span>
+        <div class="flex items-center gap-1.5">
+          <span id="srvB"
+            class="hidden text-yellow-300 font-black text-[10px] tracking-widest
+                   bg-yellow-400/15 px-1.5 py-0.5 rounded-full">SERVES</span>
+          <span class="text-orange-400 font-black text-base">Player B</span>
         </div>
-        <div id="posB" class="text-gray-500 text-xs mt-0.5 leading-snug"></div>
+        <div id="posB" class="text-gray-500 text-[10px] leading-tight mt-0.5"></div>
       </div>
-      <div id="sB" class="text-8xl font-black text-orange-400 tabular-nums leading-none">0</div>
+      <div id="sB" class="text-5xl font-black text-orange-400 tabular-nums leading-none">0</div>
     </div>
 
-    <!-- ══════════════════════════════════════════════════════════════════════
-      Court SVG  —  ViewBox 0 0 200 360
-      Play area  x[8..192]  y[8..352]  →  184 × 344 px
-      Net        y = 180   (exact mid of 8..352)
-      Scale      6.7 m → 172 px  (half-court height)
-
-      Court lines:
-        Doubles sidelines  = outer boundary  x=8, x=192
-        Singles sidelines  x=23, x=177       (5.18/6.1 × 184 ≈ 156 → 14 px inset each side)
-        Short service line y=130 (B), y=230 (A)   (1.98/6.7 × 172 ≈ 51 px from net)
-        Doubles back svc   y=28  (B), y=332 (A)   (0.76/6.7 × 172 ≈ 20 px from baseline)
-        Center service     x=100  between y=130..230
-
-      Even/Odd rule (server's own score):
-        Even → RIGHT service court (server's perspective)
-        Odd  → LEFT  service court
-
-      Orientation:
-        Player A at BOTTOM, faces NORTH (up) → A's right = diagram's RIGHT (+x)
-        Player B at TOP,    faces SOUTH (down) → B's right = diagram's LEFT  (−x)
-
-      Doubles — 4 players (pA1, pA2, pB1, pB2):
-        A1/B1 = "player 1" of each team (primary, follows Even/Odd rule)
-        A2/B2 = partner (always in the OTHER service court from their #1)
-        Receiver:  p1 of receiving team receives when (serverEven === receiverEven)
-                   i.e. both or neither teams have even scores
-        Diagonal:  server's court ↔ receiver's court are always diagonally opposite
-    ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="w-full flex justify-center">
+    <!-- Court SVG ───────────────────────────────────────────────────────────
+      ViewBox 0 0 200 360  (same geometry, just rendered smaller)
+      Player A at bottom (faces north), Player B at top (faces south)
+      Even score → RIGHT service court  |  Odd → LEFT  (server's perspective)
+    ──────────────────────────────────────────────────────────────────────── -->
+    <div class="w-full flex justify-center shrink-0">
       <svg id="court" viewBox="0 0 200 360" xmlns="http://www.w3.org/2000/svg"
-           class="w-full rounded-xl shadow-2xl" style="max-width:200px; max-height:244px;">
+           class="rounded-xl shadow-2xl" style="width:auto; height:152px;">
 
-        <!-- Background -->
         <rect width="200" height="360" fill="#0b1a0c"/>
 
-        <!-- ── Highlights (behind lines so lines stay crisp) ── -->
-        <!-- Server court: gold -->
+        <!-- Highlights -->
         <rect id="hl"    x="0" y="0" width="0" height="0" fill="#facc15" fill-opacity="0.28" rx="2"/>
-        <!-- Receiver court: light cyan (doubles only) -->
         <rect id="hlRcv" x="0" y="0" width="0" height="0" fill="#bae6fd" fill-opacity="0.13" rx="2"/>
 
-        <!-- ── Court boundary (doubles sidelines = outer wall) ── -->
+        <!-- Court boundary (doubles = outer wall) -->
         <rect x="8" y="8" width="184" height="344" fill="none" stroke="white" stroke-width="1.5"/>
 
-        <!-- ── Out-of-bounds shading (singles mode only) ── -->
+        <!-- Out-of-bounds shading (singles only) -->
         <rect id="obsL" x="8"   y="8" width="15"  height="344" fill="black" fill-opacity="0"/>
         <rect id="obsR" x="177" y="8" width="15"  height="344" fill="black" fill-opacity="0"/>
 
-        <!-- ── Singles sidelines ── -->
-        <!-- A side (bottom half: net → baseline) -->
+        <!-- Singles sidelines -->
         <line id="sLA" x1="23" y1="180" x2="23" y2="352" stroke="white" stroke-width="1"/>
         <line id="sRA" x1="177" y1="180" x2="177" y2="352" stroke="white" stroke-width="1"/>
-        <!-- B side (top half: baseline → net) -->
         <line id="sLB" x1="23" y1="8"   x2="23" y2="180" stroke="white" stroke-width="1"/>
         <line id="sRB" x1="177" y1="8"   x2="177" y2="180" stroke="white" stroke-width="1"/>
 
-        <!-- ── Doubles back service lines ── -->
+        <!-- Doubles back service lines -->
         <line id="dbA" x1="8" y1="332" x2="192" y2="332" stroke="white" stroke-width="1"/>
         <line id="dbB" x1="8" y1="28"  x2="192" y2="28"  stroke="white" stroke-width="1"/>
 
-        <!-- ── Short service lines (always shown) ── -->
+        <!-- Short service lines -->
         <line x1="8" y1="230" x2="192" y2="230" stroke="white" stroke-width="1"/>
         <line x1="8" y1="130" x2="192" y2="130" stroke="white" stroke-width="1"/>
 
-        <!-- ── Center service line ── -->
+        <!-- Center service line -->
         <line x1="100" y1="130" x2="100" y2="230" stroke="white" stroke-width="1"/>
 
-        <!-- ── Net ── -->
+        <!-- Net -->
         <line x1="8" y1="183" x2="192" y2="183" stroke="black" stroke-width="3" stroke-opacity="0.45"/>
         <line x1="8" y1="180" x2="192" y2="180" stroke="white" stroke-width="3"/>
         <circle cx="8"   cy="180" r="2.8" fill="#d1d5db"/>
         <circle cx="192" cy="180" r="2.8" fill="#d1d5db"/>
 
-        <!-- ── L/R orientation labels ── -->
-        <!-- A's perspective (bottom, faces up): right = diagram right -->
+        <!-- L/R labels (A bottom faces up, B top faces down) -->
         <text x="55"  y="357" text-anchor="middle" font-size="8" fill="#374151" font-family="sans-serif">L</text>
         <text x="145" y="357" text-anchor="middle" font-size="8" fill="#374151" font-family="sans-serif">R</text>
-        <!-- B's perspective (top, faces down): right = diagram left -->
-        <text x="55"  y="16" text-anchor="middle" font-size="8" fill="#374151" font-family="sans-serif">R</text>
-        <text x="145" y="16" text-anchor="middle" font-size="8" fill="#374151" font-family="sans-serif">L</text>
-        <!-- Side labels -->
-        <text x="100" y="357" text-anchor="middle" font-size="9" fill="#374151"
-              font-family="sans-serif" font-weight="bold">▲ A</text>
-        <text x="100" y="16"  text-anchor="middle" font-size="9" fill="#374151"
-              font-family="sans-serif" font-weight="bold">B ▼</text>
+        <text x="55"  y="16"  text-anchor="middle" font-size="8" fill="#374151" font-family="sans-serif">R</text>
+        <text x="145" y="16"  text-anchor="middle" font-size="8" fill="#374151" font-family="sans-serif">L</text>
+        <text x="100" y="357" text-anchor="middle" font-size="9" fill="#374151" font-family="sans-serif" font-weight="bold">▲ A</text>
+        <text x="100" y="16"  text-anchor="middle" font-size="9" fill="#374151" font-family="sans-serif" font-weight="bold">B ▼</text>
 
-        <!-- ════════════════════════════════════════════════════════
-          SINGLES: one dot per team (dA, dB)
-          Hidden in doubles mode.
-        ═════════════════════════════════════════════════════════ -->
-        <circle id="dA" cx="146" cy="281" r="8"
-                fill="#3b82f6" fill-opacity="0.9" stroke="#bfdbfe" stroke-width="1.5"/>
-        <circle id="dB" cx="54"  cy="79"  r="8"
-                fill="#f97316" fill-opacity="0.9" stroke="#fed7aa" stroke-width="1.5"/>
+        <!-- SINGLES: one dot per team -->
+        <circle id="dA" cx="146" cy="281" r="8" fill="#3b82f6" fill-opacity="0.9" stroke="#bfdbfe" stroke-width="1.5"/>
+        <circle id="dB" cx="54"  cy="79"  r="8" fill="#f97316" fill-opacity="0.9" stroke="#fed7aa" stroke-width="1.5"/>
 
-        <!-- ════════════════════════════════════════════════════════
-          DOUBLES: four labeled player groups (hidden in singles mode)
-
-          Each group: circle (role-styled dynamically) + number "1"/"2" + role badge "S"/"R"
-          IDs: group=pA1, circle=cA1, role-text=rA1  (team letter + player number)
-
-          Initial positions (score 0-0, A serves):
-            pA1 (146,281): A1 serves  · A's right service court
-            pA2 ( 54,281): A2 partner · A's left  service court
-            pB1 ( 54, 79): B1 receives· B's right service court (diagram left)
-            pB2 (146, 79): B2 partner · B's left  service court (diagram right)
-        ═════════════════════════════════════════════════════════ -->
-
-        <!-- A1 — Team A, player 1 -->
+        <!-- DOUBLES: four labeled player groups (hidden in singles) -->
         <g id="pA1" transform="translate(146,281)" opacity="0">
           <circle id="cA1" r="9" fill="#3b82f6" stroke="#facc15" stroke-width="2.5"/>
-          <!-- number label (centred in circle) -->
-          <text text-anchor="middle" dominant-baseline="middle"
-                font-size="10" fill="white" font-weight="bold" font-family="sans-serif">1</text>
-          <!-- role badge floats above the circle -->
-          <text id="rA1" y="-15" text-anchor="middle"
-                font-size="9" fill="#facc15" font-weight="bold" font-family="sans-serif">S</text>
+          <text text-anchor="middle" dominant-baseline="middle" font-size="10" fill="white" font-weight="bold" font-family="sans-serif">1</text>
+          <text id="rA1" y="-15" text-anchor="middle" font-size="9" fill="#facc15" font-weight="bold" font-family="sans-serif">S</text>
         </g>
-
-        <!-- A2 — Team A, player 2 (partner) -->
         <g id="pA2" transform="translate(54,281)" opacity="0">
           <circle id="cA2" r="6.5" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.5"/>
-          <text text-anchor="middle" dominant-baseline="middle"
-                font-size="9" fill="#bfdbfe" font-family="sans-serif">2</text>
-          <text id="rA2" y="-12" text-anchor="middle"
-                font-size="8" fill="#60a5fa" font-family="sans-serif"></text>
+          <text text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#bfdbfe" font-family="sans-serif">2</text>
+          <text id="rA2" y="-12" text-anchor="middle" font-size="8" fill="#60a5fa" font-family="sans-serif"></text>
         </g>
-
-        <!-- B1 — Team B, player 1 -->
         <g id="pB1" transform="translate(54,79)" opacity="0">
           <circle id="cB1" r="9" fill="#f97316" stroke="#ffffff" stroke-width="2.5"/>
-          <text text-anchor="middle" dominant-baseline="middle"
-                font-size="10" fill="white" font-weight="bold" font-family="sans-serif">1</text>
-          <text id="rB1" y="-15" text-anchor="middle"
-                font-size="9" fill="#ffffff" font-weight="bold" font-family="sans-serif">R</text>
+          <text text-anchor="middle" dominant-baseline="middle" font-size="10" fill="white" font-weight="bold" font-family="sans-serif">1</text>
+          <text id="rB1" y="-15" text-anchor="middle" font-size="9" fill="#ffffff" font-weight="bold" font-family="sans-serif">R</text>
         </g>
-
-        <!-- B2 — Team B, player 2 (partner) -->
         <g id="pB2" transform="translate(146,79)" opacity="0">
           <circle id="cB2" r="6.5" fill="#7c2d12" stroke="#fb923c" stroke-width="1.5"/>
-          <text text-anchor="middle" dominant-baseline="middle"
-                font-size="9" fill="#fed7aa" font-family="sans-serif">2</text>
-          <text id="rB2" y="-12" text-anchor="middle"
-                font-size="8" fill="#fb923c" font-family="sans-serif"></text>
+          <text text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#fed7aa" font-family="sans-serif">2</text>
+          <text id="rB2" y="-12" text-anchor="middle" font-size="8" fill="#fb923c" font-family="sans-serif"></text>
         </g>
 
       </svg>
     </div>
 
     <!-- Doubles legend (hidden in singles) -->
-    <div id="legend" class="hidden w-full flex justify-center gap-5 -mt-1">
-      <span class="flex items-center gap-1.5 text-xs text-gray-400">
-        <svg width="16" height="16" viewBox="-8 -8 16 16">
-          <circle r="7" fill="#3b82f6" stroke="#facc15" stroke-width="2"/>
-          <text text-anchor="middle" dominant-baseline="middle" font-size="7"
-                fill="white" font-weight="bold" font-family="sans-serif">1</text>
-        </svg>
-        Server
-      </span>
-      <span class="flex items-center gap-1.5 text-xs text-gray-400">
-        <svg width="16" height="16" viewBox="-8 -8 16 16">
-          <circle r="7" fill="#f97316" stroke="#ffffff" stroke-width="2"/>
-          <text text-anchor="middle" dominant-baseline="middle" font-size="7"
-                fill="white" font-weight="bold" font-family="sans-serif">1</text>
-        </svg>
-        Receiver
-      </span>
-      <span class="flex items-center gap-1.5 text-xs text-gray-400">
+    <div id="legend" class="hidden w-full flex justify-center gap-4 shrink-0">
+      <span class="flex items-center gap-1 text-[11px] text-gray-400">
         <svg width="14" height="14" viewBox="-7 -7 14 14">
-          <circle r="6" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.5"/>
-          <text text-anchor="middle" dominant-baseline="middle" font-size="7"
-                fill="#bfdbfe" font-family="sans-serif">2</text>
-        </svg>
-        Partner
+          <circle r="6" fill="#3b82f6" stroke="#facc15" stroke-width="2"/>
+          <text text-anchor="middle" dominant-baseline="middle" font-size="6" fill="white" font-weight="bold" font-family="sans-serif">1</text>
+        </svg>Server
+      </span>
+      <span class="flex items-center gap-1 text-[11px] text-gray-400">
+        <svg width="14" height="14" viewBox="-7 -7 14 14">
+          <circle r="6" fill="#f97316" stroke="#ffffff" stroke-width="2"/>
+          <text text-anchor="middle" dominant-baseline="middle" font-size="6" fill="white" font-weight="bold" font-family="sans-serif">1</text>
+        </svg>Receiver
+      </span>
+      <span class="flex items-center gap-1 text-[11px] text-gray-400">
+        <svg width="12" height="12" viewBox="-6 -6 12 12">
+          <circle r="5" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.5"/>
+          <text text-anchor="middle" dominant-baseline="middle" font-size="5" fill="#bfdbfe" font-family="sans-serif">2</text>
+        </svg>Partner
       </span>
     </div>
 
     <!-- Player A score card -->
     <div id="cardA"
-      class="w-full bg-gray-900 rounded-2xl px-5 py-3 flex items-center justify-between border-2 border-gray-800"
+      class="w-full bg-gray-900 rounded-xl px-4 py-2 flex items-center justify-between
+             border-2 border-gray-800 shrink-0"
       style="transition:border-color .15s">
       <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <span id="srvA" class="hidden text-yellow-300 font-black text-xs tracking-widest
-                                  bg-yellow-400/15 px-2 py-0.5 rounded-full">SERVES</span>
-          <span class="text-blue-400 font-black text-xl">Player A</span>
+        <div class="flex items-center gap-1.5">
+          <span id="srvA"
+            class="hidden text-yellow-300 font-black text-[10px] tracking-widest
+                   bg-yellow-400/15 px-1.5 py-0.5 rounded-full">SERVES</span>
+          <span class="text-blue-400 font-black text-base">Player A</span>
         </div>
-        <div id="posA" class="text-gray-500 text-xs mt-0.5 leading-snug"></div>
+        <div id="posA" class="text-gray-500 text-[10px] leading-tight mt-0.5"></div>
       </div>
-      <div id="sA" class="text-8xl font-black text-blue-400 tabular-nums leading-none">0</div>
+      <div id="sA" class="text-5xl font-black text-blue-400 tabular-nums leading-none">0</div>
     </div>
 
-    <!-- Serve info line -->
-    <p id="serveLine" class="text-xs text-gray-400 text-center -mt-1 px-2 leading-snug min-h-4"></p>
+    <!-- Serve info line (doubles: "A1 serves → B2 receives"; singles: position) -->
+    <p id="serveLine"
+      class="text-[11px] text-gray-500 text-center leading-tight px-2 shrink-0"></p>
 
     <!-- Score buttons -->
-    <div class="w-full grid grid-cols-2 gap-3">
+    <div class="w-full grid grid-cols-2 gap-3 shrink-0">
       <button onclick="addPoint('B')"
-        class="btn py-7 rounded-2xl text-2xl font-black bg-orange-600 hover:bg-orange-500
-               text-white shadow-xl shadow-orange-900/40">
+        class="btn py-4 rounded-2xl text-xl font-black bg-orange-600 hover:bg-orange-500
+               text-white shadow-lg shadow-orange-900/40">
         +1 B
       </button>
       <button onclick="addPoint('A')"
-        class="btn py-7 rounded-2xl text-2xl font-black bg-blue-600 hover:bg-blue-500
-               text-white shadow-xl shadow-blue-900/40">
+        class="btn py-4 rounded-2xl text-xl font-black bg-blue-600 hover:bg-blue-500
+               text-white shadow-lg shadow-blue-900/40">
         +1 A
       </button>
     </div>
 
-    <!-- Undo button -->
+    <!-- Undo -->
     <button id="undoBtn" onclick="undo()"
-      class="btn w-full py-4 rounded-2xl font-bold text-base bg-gray-800 hover:bg-gray-700
-             text-gray-300 shadow disabled:opacity-20 disabled:cursor-not-allowed">
+      class="btn w-full py-2.5 rounded-xl font-bold text-sm bg-gray-800 hover:bg-gray-700
+             text-gray-300 shadow shrink-0 disabled:opacity-20 disabled:cursor-not-allowed">
       ↩ Undo Last Point
     </button>
 
@@ -305,48 +252,28 @@
     </div>
   </div>
 
-  <!-- ████  SCRIPT  ████ -->
+  <!-- ████  SCRIPT  (unchanged) ████ -->
   <script>
   'use strict';
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  Court geometry  (SVG viewBox "0 0 200 360")
-  //  Play area  x ∈ [8,192]   y ∈ [8,352]   →  184 × 344 px
-  //  Net y = 180  (midpoint).  Half-court = 172 px.  Scale: 6.7 m → 172 px.
-  // ═══════════════════════════════════════════════════════════════════════════
   const K = {
     top:8, bot:352, lft:8, rgt:192, mid:100, net:180,
-    sglL:23, sglR:177,           // singles sidelines
-    svcA:230, svcB:130,           // short service lines
-    dblA:332, dblB:28,            // doubles back service lines
+    sglL:23, sglR:177,
+    svcA:230, svcB:130,
+    dblA:332, dblB:28,
   };
 
-  // ── Pre-computed doubles service court boxes ────────────────────────────────
-  // Team A (bottom):  right = [mid..rgt, svcA..dblA]    left = [lft..mid, svcA..dblA]
-  // Team B (top):     B's right = [lft..mid, dblB..svcB] (diagram LEFT)
-  //                   B's left  = [mid..rgt, dblB..svcB] (diagram RIGHT)
   const DBL = {
-    aR: { x:K.mid, y:K.svcA, w:K.rgt-K.mid, h:K.dblA-K.svcA },  // A's right
-    aL: { x:K.lft, y:K.svcA, w:K.mid-K.lft, h:K.dblA-K.svcA },  // A's left
-    bR: { x:K.lft, y:K.dblB, w:K.mid-K.lft, h:K.svcB-K.dblB },  // B's right (diagram left)
-    bL: { x:K.mid, y:K.dblB, w:K.rgt-K.mid, h:K.svcB-K.dblB },  // B's left  (diagram right)
+    aR: { x:K.mid, y:K.svcA, w:K.rgt-K.mid, h:K.dblA-K.svcA },
+    aL: { x:K.lft, y:K.svcA, w:K.mid-K.lft, h:K.dblA-K.svcA },
+    bR: { x:K.lft, y:K.dblB, w:K.mid-K.lft, h:K.svcB-K.dblB },
+    bL: { x:K.mid, y:K.dblB, w:K.rgt-K.mid, h:K.svcB-K.dblB },
   };
   const ctr = b => ({ cx: b.x + b.w/2, cy: b.y + b.h/2 });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  State
-  // ═══════════════════════════════════════════════════════════════════════════
   let G = { sA:0, sB:0, srv:'A', gA:0, gB:0, mode:'singles', over:false };
-  let H = [];  // undo snapshots
+  let H = [];
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  Server's service box  (works for both modes)
-  //
-  //  Even score → server in their RIGHT service court
-  //  Odd  score → server in their LEFT  service court
-  //  A faces north: A's right = diagram right (+x)
-  //  B faces south: B's right = diagram left  (−x)
-  // ═══════════════════════════════════════════════════════════════════════════
   function svcBox() {
     const dbl  = G.mode === 'doubles';
     const sc   = G.srv === 'A' ? G.sA : G.sB;
@@ -365,51 +292,27 @@
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  Receiver's service box  (doubles only)
-  //
-  //  Service always travels diagonally, so receiver's box is in the
-  //  OPPOSITE x-half of the diagram from the server's box, on the
-  //  opposing team's side of the net.
-  // ═══════════════════════════════════════════════════════════════════════════
   function rcvBox() {
     const sb = svcBox();
-    // Server in LEFT half (x starts < 100) → receiver in RIGHT half, and vice-versa
-    const rcvLeft = sb.x >= K.mid;   // if server is right-half, receiver is left-half
+    const rcvLeft = sb.x >= K.mid;
     const rx = rcvLeft ? K.lft : K.mid;
     const rw = rcvLeft ? K.mid-K.lft : K.rgt-K.mid;
     return G.srv === 'A'
-      ? { x:rx, y:K.dblB, w:rw, h:K.svcB-K.dblB }   // receiver on B's side (top)
-      : { x:rx, y:K.svcA, w:rw, h:K.dblA-K.svcA };   // receiver on A's side (bottom)
+      ? { x:rx, y:K.dblB, w:rw, h:K.svcB-K.dblB }
+      : { x:rx, y:K.svcA, w:rw, h:K.dblA-K.svcA };
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  Doubles: positions + roles for all 4 players
-  //
-  //  "Player 1" of each team is the primary player who follows the Even/Odd
-  //  rule directly.  "Player 2" is always in the other service court.
-  //
-  //  A1 is in A's RIGHT when sA is even, LEFT when odd  (A2 = opposite)
-  //  B1 is in B's RIGHT when sB is even, LEFT when odd  (B2 = opposite)
-  //    (remember B's right = diagram LEFT because B faces south)
-  //
-  //  Receiver determination:
-  //    Receiver = p1 of receiving team  iff  (serverEven === receiverEven)
-  //    Proof: both being even/odd means they're on diagonally opposite courts.
-  // ═══════════════════════════════════════════════════════════════════════════
   function dblPositions() {
     const { sA, sB, srv } = G;
     const srvEven = (srv === 'A' ? sA : sB) % 2 === 0;
     const rcvEven = (srv === 'A' ? sB : sA) % 2 === 0;
-    const p1Rcv   = srvEven === rcvEven; // player-1 of recv team is the receiver
+    const p1Rcv   = srvEven === rcvEven;
 
-    // Dot centres
     const a1 = ctr(sA % 2 === 0 ? DBL.aR : DBL.aL);
     const a2 = ctr(sA % 2 === 0 ? DBL.aL : DBL.aR);
     const b1 = ctr(sB % 2 === 0 ? DBL.bR : DBL.bL);
     const b2 = ctr(sB % 2 === 0 ? DBL.bL : DBL.bR);
 
-    // Role assignments
     const roles = {};
     if (srv === 'A') {
       roles.pA1 = 'server';   roles.pA2 = 'partner';
@@ -430,18 +333,15 @@
     };
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  Doubles player style
-  // ═══════════════════════════════════════════════════════════════════════════
   const TC = {
     A: { bright:'#3b82f6', dim:'#1e3a8a', ring:'#60a5fa' },
     B: { bright:'#f97316', dim:'#7c2d12', ring:'#fb923c' },
   };
 
   function stylePlayer(pid, role, team) {
-    const suf = pid.slice(1);        // 'A1', 'A2', 'B1', 'B2'
-    const c   = $('c' + suf);       // circle element
-    const r   = $('r' + suf);       // role badge text
+    const suf = pid.slice(1);
+    const c   = $('c' + suf);
+    const r   = $('r' + suf);
     const t   = TC[team];
     if (role === 'server') {
       c.setAttribute('r','9');
@@ -453,7 +353,7 @@
       c.setAttribute('fill', t.bright); c.setAttribute('fill-opacity','0.95');
       c.setAttribute('stroke','#ffffff'); c.setAttribute('stroke-width','2.5');
       r.textContent = 'R'; r.setAttribute('fill','#ffffff'); r.setAttribute('y','-15');
-    } else {                          // partner
+    } else {
       c.setAttribute('r','6.5');
       c.setAttribute('fill', t.dim); c.setAttribute('fill-opacity','0.75');
       c.setAttribute('stroke', t.ring); c.setAttribute('stroke-width','1.5');
@@ -465,9 +365,6 @@
     $(pid).setAttribute('transform', `translate(${cx},${cy})`);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  Game actions
-  // ═══════════════════════════════════════════════════════════════════════════
   function addPoint(p) {
     if (G.over) return;
     H.push({ ...G });
@@ -512,9 +409,6 @@
     draw();
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  Modal
-  // ═══════════════════════════════════════════════════════════════════════════
   function openModal(w) {
     const isMatch = G.gA >= 2 || G.gB >= 2;
     $('mTitle').textContent = `Player ${w} wins the ${isMatch ? 'match' : 'game'}!`;
@@ -527,83 +421,60 @@
   }
   function closeModal() { $('modal').classList.add('hidden'); }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  Render
-  // ═══════════════════════════════════════════════════════════════════════════
   function draw() {
     const { sA, sB, srv, gA, gB, mode, over } = G;
     const dbl = mode === 'doubles';
 
-    // Scores & sets
     $('sA').textContent = sA; $('sB').textContent = sB;
     $('gA').textContent = gA; $('gB').textContent = gB;
 
-    // SERVES badge
     $('srvA').classList.toggle('hidden', srv !== 'A');
     $('srvB').classList.toggle('hidden', srv !== 'B');
 
-    // Card border glow
     $('cardA').style.borderColor = srv === 'A' ? '#3b82f6' : '#1f2937';
     $('cardB').style.borderColor = srv === 'B' ? '#f97316' : '#1f2937';
 
-    // Mode button
     $('modeBtn').textContent = dbl ? 'Doubles' : 'Singles';
     $('modeBtn').style.backgroundColor = dbl ? '#047857' : '#6d28d9';
 
-    // Undo
     $('undoBtn').disabled = H.length === 0 || over;
 
-    // ── Court line visibility ────────────────────────────────────────────────
-    const so  = dbl ? '0.12' : '0.90';   // singles sidelines
-    const dop = dbl ? '0.90' : '0.12';   // doubles back service lines
+    const so  = dbl ? '0.12' : '0.90';
+    const dop = dbl ? '0.90' : '0.12';
     ['sLA','sRA','sLB','sRB'].forEach(i => sa(i,'opacity', so));
     ['dbA','dbB'].forEach(i => sa(i,'opacity', dop));
-    const obsOp = dbl ? '0' : '0.22';
-    sa('obsL','fill-opacity', obsOp); sa('obsR','fill-opacity', obsOp);
+    sa('obsL','fill-opacity', dbl ? '0' : '0.22');
+    sa('obsR','fill-opacity', dbl ? '0' : '0.22');
 
-    // ── Server highlight box (always shown) ─────────────────────────────────
     const sb = svcBox();
     setRect('hl', sb.x, sb.y, sb.w, sb.h);
 
-    // ── Deuce / Advantage / Match-point suffix ───────────────────────────────
     const max = Math.max(sA, sB), diff = Math.abs(sA - sB);
     let extra = '';
-    if      (max >= 29)              extra = ' · <b class="text-red-400">Match point!</b>';
+    if      (max >= 29)              extra = ' · <b class="text-red-400">Match pt!</b>';
     else if (max >= 20 && diff === 0) extra = ' · <b class="text-yellow-300">Deuce!</b>';
     else if (max >= 20 && diff === 1) extra = ` · <b class="text-yellow-300">Adv. ${sA>sB?'A':'B'}</b>`;
 
     if (dbl) {
-      // ══════════════════════════════════════════════════════════════════════
-      //  DOUBLES MODE
-      // ══════════════════════════════════════════════════════════════════════
-
-      // Show doubles players, hide singles dots
       sa('dA','opacity','0'); sa('dB','opacity','0');
       ['pA1','pA2','pB1','pB2'].forEach(id => sa(id,'opacity','1'));
       $('legend').classList.remove('hidden');
 
-      // Receiver highlight box
       const rb = rcvBox();
       setRect('hlRcv', rb.x, rb.y, rb.w, rb.h);
 
-      // Compute positions & roles
       const { pos, roles, srvLabel, rcvLabel } = dblPositions();
-
       ['pA1','pA2','pB1','pB2'].forEach(pid => {
         moveGroup(pid, pos[pid].cx, pos[pid].cy);
-        stylePlayer(pid, roles[pid], pid[1]); // pid[1] = 'A' or 'B'
+        stylePlayer(pid, roles[pid], pid[1]);
       });
 
-      // Serve info line
       const sC = srv === 'A' ? 'text-blue-400' : 'text-orange-400';
       const rC = srv === 'A' ? 'text-orange-400' : 'text-blue-400';
       $('serveLine').innerHTML =
-        `<span class="${sC} font-bold">${srvLabel}</span>`
-        + ` serves &nbsp;→&nbsp; `
-        + `<span class="${rC} font-bold">${rcvLabel}</span>`
-        + ` receives${extra}`;
+        `<span class="${sC} font-bold">${srvLabel}</span> serves → `
+        + `<span class="${rC} font-bold">${rcvLabel}</span> receives${extra}`;
 
-      // Position sub-labels on score cards
       const svrScore = srv === 'A' ? sA : sB;
       const posStr   = svrScore % 2 === 0 ? 'Right court' : 'Left court';
       if (srv === 'A') {
@@ -615,19 +486,11 @@
       }
 
     } else {
-      // ══════════════════════════════════════════════════════════════════════
-      //  SINGLES MODE
-      // ══════════════════════════════════════════════════════════════════════
-
-      // Show singles dots, hide doubles players
       sa('dA','opacity','1'); sa('dB','opacity','1');
       ['pA1','pA2','pB1','pB2'].forEach(id => sa(id,'opacity','0'));
       $('legend').classList.add('hidden');
-
-      // Hide receiver highlight
       setRect('hlRcv', 0, 0, 0, 0);
 
-      // Move server dot to its service box centre; fade non-server dot
       const cx = sb.x + sb.w / 2;
       const cy = sb.y + sb.h / 2;
       if (srv === 'A') {
@@ -638,31 +501,25 @@
         sa('dA','cx','100'); sa('dA','cy','281');  sa('dA','fill-opacity','0.28');
       }
 
-      // Serve info line
       const score = srv === 'A' ? sA : sB;
       const even  = score % 2 === 0;
-      const pos   = even ? 'Right service court' : 'Left service court';
+      const pos   = even ? 'Right court' : 'Left court';
       const sC    = srv === 'A' ? 'text-blue-400' : 'text-orange-400';
       $('serveLine').innerHTML =
         `<span class="${sC} font-semibold">Player ${srv}</span> serves · ${pos}${extra}`;
 
-      // Position sub-labels
       const detail = `${pos} · score ${score} (${even ? 'even' : 'odd'})`;
       $('posA').textContent = srv === 'A' ? detail : '';
       $('posB').textContent = srv === 'B' ? detail : '';
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  DOM micro-helpers
-  // ═══════════════════════════════════════════════════════════════════════════
   const $ = id => document.getElementById(id);
   const sa = (id, attr, val) => $(id).setAttribute(attr, val);
   function setRect(id, x, y, w, h) {
     sa(id,'x',x); sa(id,'y',y); sa(id,'width',w); sa(id,'height',h);
   }
 
-  // Boot
   draw();
   </script>
 </body>
